@@ -7,18 +7,27 @@ cc -o rfidreader rfidreader.c -L./PIGPIO -lpigpio -lrt -pthread
 */
 
 #define EM4095_DEMOD 11 /* GPIO 11 as interrupt input */
-#define TICKDURATION 100
-#define BITLENGTH 100
+#define TICKDURATION 0.000001
+#define BITLENGTH 256
+#define BIT1_LO 192
+#define BIT1_HI 320
+#define BIT1_5_LO 320
+#define BIT1_5_HI 448
+#define BIT2_LO 448
+#define BIT2_HI 576
 
 #define ClearBuffer() bufferState = empty
 static unsigned int dataBuffer[13];
 static enum states {empty, header, data, stop, full} bufferState = empty;
 
-void AddBitToBuffer(unsigned int bit) {
+inline void AddBitToBuffer(unsigned int bit) {
   static unsigned int blockIndex = 0;
   static unsigned int innerBlockIndex = 0;
   static unsigned int headerIndex = 0;
   static unsigned int stopIndex = 0;
+
+  //printf("%i", bit);
+
 
   switch (bufferState) {
     case empty:
@@ -38,6 +47,7 @@ void AddBitToBuffer(unsigned int bit) {
         bufferState = data;
         blockIndex = 0;
         innerBlockIndex = 0;
+        dataBuffer[0] = 0;
       }
       break;
     case data:
@@ -53,6 +63,7 @@ void AddBitToBuffer(unsigned int bit) {
         dataBuffer[blockIndex] >>= 1;
         blockIndex++;
         innerBlockIndex = 0;
+        dataBuffer[blockIndex] = 0;
       }
       if (blockIndex == 13) {
         stopIndex = 0;
@@ -85,32 +96,32 @@ void pinChanged(int pin, int level, uint32_t tick) {
   #define BITLENGTH_1_5 2
   #define BITLENGTH_2   3
   unsigned char bitLengthDetected = BITLENGTH_UNKNOWN;
-  unsigned char isBitPositionMiddle = 0;
-  unsigned char isBitPositionDetermined = 0;
+  static unsigned char isBitPositionMiddle = 0;
+  static unsigned char isBitPositionDetermined = 0;
 
   //Prüfen, ob Puffer bereit ist. Sonst Routine sofort verlassen
   if (bufferState == full) {
     return;
   }
 
-  printf("Pin change detected\n");
+  //printf("Pin change detected\n");
   //Steigende Flanke erkennen
   if (level > 0) {
-    printf("Rising edge detected\n");
+    //printf("Rising edge detected\n");
     timeDelta = tick - lastRisingEdge;
     lastRisingEdge = tick;
-
-    if ((timeDelta >= (0.75 * BITLENGTH)) && (timeDelta < (1.25 * BITLENGTH))) {
+    //printf("tick: %i, delta: %i\n", tick, timeDelta);
+    if ((timeDelta >= BIT1_LO) && (timeDelta < BIT1_HI)) {
       bitLengthDetected = BITLENGTH_1;
     }
     else {
-      if ((timeDelta >= (1.25 * BITLENGTH)) && (timeDelta < (1.75 * BITLENGTH))) {
+      if ((timeDelta >= BIT1_5_LO) && (timeDelta < BIT1_5_HI)) {
         bitLengthDetected = BITLENGTH_1_5;
         //Wenn 1.5 Bitlängen zwischen zwei Flanken liegen, dann ändert sich die Bitposition
         isBitPositionMiddle = !isBitPositionMiddle;
       }
       else {
-        if ((timeDelta >= (1.75 * BITLENGTH)) && (timeDelta < (2.25 * BITLENGTH))) {
+        if ((timeDelta >= BIT2_LO) && (timeDelta < BIT2_HI)) {
           bitLengthDetected = BITLENGTH_2;
           //Wenn zwei Bitlängen zwischen den Flanken liegen, dass ist die aktuelle Position in der Mitte
           isBitPositionMiddle = 1;
@@ -121,6 +132,7 @@ void pinChanged(int pin, int level, uint32_t tick) {
           bitLengthDetected = BITLENGTH_UNKNOWN;
           //Wenn eine unbekannte Bitlänge erkannt wurde, muss die Bitposition zunächst erneut eindeutig bestimmt werden
           isBitPositionDetermined = 0;
+          //printf("\n\n");
         }
       }
     }
@@ -307,12 +319,15 @@ void test(){
 int main (int argc, char *argv[])
 {
   printf("This is rfidreader\n");
+  printf("Using Bitlength of %i\n", BITLENGTH);
+  printf("Bit limits: %i %i %i %i", BIT1_LO, BIT1_HI, BIT1_5_HI, BIT2_HI);
+  //test();
 
-  test();
-
-  return 0;
+  //return 0;
+  gpioCfgClock(5, PI_CLOCK_PCM, PI_CLOCK_PLLD);
 
   if (gpioInitialise()<0) return 1;
+
 
   if (gpioSetAlertFunc(EM4095_DEMOD, pinChanged) != 0) {
    printf("Alert Function Registration failed\n");
@@ -324,10 +339,10 @@ int main (int argc, char *argv[])
     //Prüfen, ob ein gültiges Paket empfangen wurde
     if (bufferState == full) {
       //Daten ausleses
-      printf("ID detected: %i\n", dataBuffer[7] << 8 + dataBuffer[8] >> 4); 
+      printf("ID detected: %i\n", (dataBuffer[7] << 4) + (dataBuffer[8] >> 4)); 
       ClearBuffer();
     }
-    gpioDelay(1000000);
+    gpioDelay(100000);
   }
   
   gpioTerminate();
