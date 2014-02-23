@@ -1,20 +1,17 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "PIGPIO/pigpio.h"
-
-/*
-cc -o rfidreader rfidreader.c -L./PIGPIO -lpigpio -lrt -pthread
-*/
 
 #define EM4095_DEMOD 11 /* GPIO 11 as interrupt input */
 #define TICKDURATION 0.000001
 #define BITLENGTH 256
-#define BIT1_LO 192
-#define BIT1_HI 320
-#define BIT1_5_LO 320
-#define BIT1_5_HI 448
-#define BIT2_LO 448
-#define BIT2_HI 576
+#define BIT1_LO   192 //0.75 * BITLENGTH
+#define BIT1_HI   320 //1.25 * BITLENGTH
+#define BIT1_5_LO 320 //1.25 * BITLENGTH
+#define BIT1_5_HI 448 //1.75 * BITLENGTH
+#define BIT2_LO   448 //1.75 * BITLENGTH
+#define BIT2_HI   576 //2.25 * BITLENGTH
 
 #define ClearBuffer() bufferState = empty
 static unsigned int dataBuffer[13];
@@ -25,9 +22,6 @@ inline void AddBitToBuffer(unsigned int bit) {
   static unsigned int innerBlockIndex = 0;
   static unsigned int headerIndex = 0;
   static unsigned int stopIndex = 0;
-
-  //printf("%i", bit);
-
 
   switch (bufferState) {
     case empty:
@@ -168,182 +162,35 @@ void pinChanged(int pin, int level, uint32_t tick) {
   } //level>0
 }
 
-void test(){
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(1);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-  AddBitToBuffer(0);
-
-  printf("Buffer State: %i\n", bufferState);
-  if (bufferState == full) {
-    printf("Data  0: %i\n", dataBuffer[0]);
-    printf("Data  1: %i\n", dataBuffer[1]);
-    printf("Data  2: %i\n", dataBuffer[2]);
-    printf("Data  3: %i\n", dataBuffer[3]);
-    printf("Data  4: %i\n", dataBuffer[4]);
-    printf("Data  5: %i\n", dataBuffer[5]);
-    printf("Data  6: %i\n", dataBuffer[6]);
-    printf("Data  7: %i\n", dataBuffer[7]);
-    printf("Data  8: %i\n", dataBuffer[8]);
-    printf("Data  9: %i\n", dataBuffer[9]);
-    printf("Data 10: %i\n", dataBuffer[10]);
-    printf("Data 11: %i\n", dataBuffer[11]);
-    printf("Data 12: %i\n", dataBuffer[12]);
-  }
-}
-
-int main (int argc, char *argv[])
+void rfidInit()
 {
-  printf("This is rfidreader\n");
-  printf("Using Bitlength of %i\n", BITLENGTH);
-  printf("Bit limits: %i %i %i %i", BIT1_LO, BIT1_HI, BIT1_5_HI, BIT2_HI);
-  //test();
-
-  //return 0;
   gpioCfgClock(5, PI_CLOCK_PCM, PI_CLOCK_PLLD);
 
-  if (gpioInitialise()<0) return 1;
-
+  if (gpioInitialise()<0){
+    exit(EXIT_FAILURE);
+  }
 
   if (gpioSetAlertFunc(EM4095_DEMOD, pinChanged) != 0) {
-   printf("Alert Function Registration failed\n");
+    exit(EXIT_FAILURE);
   }
   gpioSetMode(EM4095_DEMOD, PI_INPUT);
+}
 
-  while (1)
-  {
-    //Prüfen, ob ein gültiges Paket empfangen wurde
-    if (bufferState == full) {
-      //Daten ausleses
-      printf("ID detected: %i\n", (dataBuffer[7] << 4) + (dataBuffer[8] >> 4)); 
-      ClearBuffer();
-    }
-    gpioDelay(100000);
-  }
-  
+void rfidDeinit(){
   gpioTerminate();
+}
+
+int rfidCheck(unsigned int* dataBufferRef){
+  int status = 0;
+  if (bufferState == full) {
+    //Daten ausleses
+    printf("ID detected: %i\n", (dataBuffer[7] << 4) + (dataBuffer[8] >> 4)); 
+    dataBufferRef = dataBuffer;
+    ClearBuffer();
+  }
+  else {
+    status = -1;
+  }
+  gpioDelay(100000);
+  return status;
 }
