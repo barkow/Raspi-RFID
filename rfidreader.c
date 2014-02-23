@@ -1,11 +1,21 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+#define USE_WIRINGPI
+#undef USE_PIGPIO
+
+#ifdef USE_WIRINGPI
+#include "wiringPi.h"
+#endif
+
+#ifdef USE_PIGPIO
 #include "PIGPIO/pigpio.h"
+#endif
 
 #define EM4095_DEMOD 11 /* GPIO 11 as interrupt input */
-#define TICKDURATION 0.000001
-#define BITLENGTH 256
+#define BITLENGTH 256 //Bitlänge in us -> 1/125kHz*32
 #define BIT1_LO   192 //0.75 * BITLENGTH
 #define BIT1_HI   320 //1.25 * BITLENGTH
 #define BIT1_5_LO 320 //1.25 * BITLENGTH
@@ -81,8 +91,15 @@ inline void AddBitToBuffer(unsigned int bit) {
       break;
   }
 }
-
+#ifdef USE_WIRINGPI
+void pinChanged() {
+  int pin;
+  int level;
+  uint32_t tick;
+#endif
+#ifdef USE_PIGPIO
 void pinChanged(int pin, int level, uint32_t tick) {
+#endif
   static uint32_t lastRisingEdge = 0;
   uint32_t timeDelta;
   #define BITLENGTH_UNKNOWN 0
@@ -92,19 +109,24 @@ void pinChanged(int pin, int level, uint32_t tick) {
   unsigned char bitLengthDetected = BITLENGTH_UNKNOWN;
   static unsigned char isBitPositionMiddle = 0;
   static unsigned char isBitPositionDetermined = 0;
-
+  
   //Prüfen, ob Puffer bereit ist. Sonst Routine sofort verlassen
   if (bufferState == full) {
     return;
   }
+  
+  #ifdef USE_WIRINGPI
+  //WiringPi übergibt den Level und den Zeitpunkt des Interrupts nicht als Funktionsparameter. 
+  //Da der Interrupt nur bei steigenden Flanken getriggrt wird, kann der Level hier als 1 angenommen werden
+  //Der Zeitpunkt muss manuell ausgelesen werden
+  level = 1;
+  tick = micros();
+  #endif
 
-  //printf("Pin change detected\n");
   //Steigende Flanke erkennen
   if (level > 0) {
-    //printf("Rising edge detected\n");
     timeDelta = tick - lastRisingEdge;
     lastRisingEdge = tick;
-    //printf("tick: %i, delta: %i\n", tick, timeDelta);
     if ((timeDelta >= BIT1_LO) && (timeDelta < BIT1_HI)) {
       bitLengthDetected = BITLENGTH_1;
     }
@@ -164,33 +186,51 @@ void pinChanged(int pin, int level, uint32_t tick) {
 
 void rfidInit()
 {
+  #ifdef USE_PIGPIO
   gpioCfgClock(5, PI_CLOCK_PCM, PI_CLOCK_PLLD);
 
-  if (gpioInitialise()<0){
+  if (gpioInitialise()<0){    
     exit(EXIT_FAILURE);
   }
 
-  if (gpioSetAlertFunc(EM4095_DEMOD, pinChanged) != 0) {
+  if (gpioSetAlertFunc(EM4095_DEMOD, pinChanged) != 0) {  
     exit(EXIT_FAILURE);
   }
   gpioSetMode(EM4095_DEMOD, PI_INPUT);
+  #endif
+  
+  #ifdef USE_WIRINGPI
+  wiringPiSetupGpio();
+  wiringPiISR(EM4095_DEMOD, INT_EDGE_RISING,  pinChanged) ;
+  #endif
 }
 
 void rfidDeinit(){
+  #ifdef USE_PIGPIO
   gpioTerminate();
+  #endif
 }
 
-int rfidCheck(unsigned int* dataBufferRef){
+int rfidCheck(unsigned int** dataBufferRef){
   int status = 0;
   if (bufferState == full) {
-    //Daten ausleses
-    printf("ID detected: %i\n", (dataBuffer[7] << 4) + (dataBuffer[8] >> 4)); 
-    dataBufferRef = dataBuffer;
+    //Daten auslesen    
+    *dataBufferRef = dataBuffer;
     ClearBuffer();
   }
   else {
     status = -1;
   }
-  gpioDelay(100000);
+  
   return status;
+}
+
+void sleep(uint32_t us){
+  #ifdef USE_PIGPIO
+  gpioDelay(us);
+  #endif
+  
+  #ifdef USE_WIRINGPI
+  delayMicroseconds(us);
+  #endif
 }

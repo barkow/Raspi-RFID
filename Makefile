@@ -1,7 +1,9 @@
 CC=gcc 
 CFLAGS=-pthread -O2
 LFLAGS=-L./PIGPIO 
-LIBS=-lpigpio -lrt
+#GPIOLIB=-lpigpio
+GPIOLIB=-lwiringPi
+LIBS=$(GPIOLIB) -lrt
 
 all: rfidaemon
 

@@ -5,7 +5,6 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include "PIGPIO/pigpio.h"
 
 
 typedef void (*sighandler_t)(int);
@@ -41,6 +40,7 @@ int createSocket(){
 
   socketDesc = socket(AF_INET, SOCK_STREAM, 0);
   if (socketDesc == -1){
+    LOGMESSAGE("Error creating socket\n");
     exit(EXIT_FAILURE);
   }
 
@@ -49,6 +49,7 @@ int createSocket(){
   server.sin_port = htons(PORT);
 
   if (bind(socketDesc, (struct sockaddr *)&server, sizeof(server)) < 0){
+    LOGMESSAGE("Error binding socket\n");
     exit(EXIT_FAILURE);
   }
 
@@ -64,6 +65,7 @@ int waitForConnection(int socketDesc){
   c = sizeof(struct sockaddr_in);
   clientSock = accept(socketDesc, (struct sockaddr *)&client, (socklen_t*)&c);
   if (clientSock < 0) {
+    LOGMESSAGE("Error accepting socket connection\n");
     exit(EXIT_FAILURE);
   }
   return clientSock;
@@ -80,6 +82,7 @@ int main (int argc, char *argv[])
 
   //Handler für das Beenden des Prozesses anmelden
   signal_add(SIGTERM, shutdownProcess);
+  signal(SIGPIPE, SIG_IGN);
 
   socketDesc = createSocket();
 
@@ -91,12 +94,22 @@ int main (int argc, char *argv[])
     }
 
     //Prüfen, ob ein gültiges Paket empfangen wurde
-    if (rfidCheck(rfidData) == 0) {
+    if (rfidCheck(&rfidData) == 0) {
+      char dataString[13*2+2] = "";
+      int i;
       //Daten ausleses
-      if (write(clientSock, "Hallo", strlen("Hallo"))< 0){
-        LOGMESSAGE("Socket disconnected\n");
+      for (i=0; i<13; i++){
+        char tmp[10];
+        sprintf(tmp, "%02x", rfidData[i]);
+        strcat(dataString, tmp);
+      }
+      strcat(dataString, "\n");      
+      if (write(clientSock, dataString, strlen(dataString))< 0){
+        LOGMESSAGE("Client disconnected\n");
+        close(clientSock);
         clientSock = -1;
       }
     }
+    sleep(200000);
   }
 }
