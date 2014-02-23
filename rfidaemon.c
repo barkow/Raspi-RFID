@@ -15,7 +15,7 @@ typedef void (*sighandler_t)(int);
 static void shutdownProcess(int signr) {
   if (signr == SIGTERM) {
     LOGMESSAGE("Bye\n");
-    rfidDeinit();
+    rfidDeinit();    
     exit(EXIT_SUCCESS);
   }
 }
@@ -45,7 +45,8 @@ int createSocket(){
   }
 
   server.sin_family = AF_INET;
-  server.sin_addr.s_addr = INADDR_ANY;
+  //Nur lokale Verbindungen zulassen
+  server.sin_addr.s_addr = inet_addr("127.0.0.1");
   server.sin_port = htons(PORT);
 
   if (bind(socketDesc, (struct sockaddr *)&server, sizeof(server)) < 0){
