@@ -1,18 +1,9 @@
+#include "rfidreader.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdint.h>
 
-#undef USE_WIRINGPI
-#undef USE_PIGPIO
-
-#ifdef USE_WIRINGPI
 #include "wiringPi.h"
-#endif
-
-#ifdef USE_PIGPIO
-#include "PIGPIO/pigpio.h"
-#endif
 
 #define EM4095_DEMOD 11 /* GPIO 11 as interrupt input */
 #define BITLENGTH 256 //Bitlänge in us -> 1/125kHz*32
@@ -27,7 +18,7 @@
 static unsigned int dataBuffer[13];
 static enum states {empty, header, data, stop, full} bufferState = empty;
 
-inline void AddBitToBuffer(unsigned int bit) {
+void rfidReaderClass::AddBitToBuffer(unsigned int bit) {
   static unsigned int blockIndex = 0;
   static unsigned int innerBlockIndex = 0;
   static unsigned int headerIndex = 0;
@@ -82,24 +73,35 @@ inline void AddBitToBuffer(unsigned int bit) {
         bufferState = empty;
       }
       if (stopIndex == 2) {
-        bufferState = full;
+        tagBuffer[2] = tagBuffer[1];
+        tagBuffer[1] = tagBuffer[0];
+        tagBuffer[0] = "";
+        //Daten ausleses
+        for (int i=0; i<13; i++){
+          char tmp[10];
+          sprintf(tmp, "%02x", dataBuffer[i]);
+          tagBuffer[0] += tmp;
+        }
+        if ((tagBuffer[2] == tagBuffer[1]) && (tagBuffer[1] == tagBuffer[0])){
+          bufferState = full;
+        }
+        else {
+          bufferState = empty;
+        }
       }
       break;
     case full:
+
       break;
     default:
       break;
   }
 }
-#ifndef USE_PIGPIO
-void pinChanged() {
+
+void rfidReaderClass::pinChanged() {
   int pin;
   int level;
   uint32_t tick;
-#endif
-#ifdef USE_PIGPIO
-void pinChanged(int pin, int level, uint32_t tick) {
-#endif
   static uint32_t lastRisingEdge = 0;
   uint32_t timeDelta;
   #define BITLENGTH_UNKNOWN 0
@@ -115,13 +117,11 @@ void pinChanged(int pin, int level, uint32_t tick) {
     return;
   }
 
-  #ifdef USE_WIRINGPI
   //WiringPi übergibt den Level und den Zeitpunkt des Interrupts nicht als Funktionsparameter.
   //Da der Interrupt nur bei steigenden Flanken getriggrt wird, kann der Level hier als 1 angenommen werden
   //Der Zeitpunkt muss manuell ausgelesen werden
   level = 1;
   tick = micros();
-  #endif
 
   //Steigende Flanke erkennen
   if (level > 0) {
@@ -184,53 +184,28 @@ void pinChanged(int pin, int level, uint32_t tick) {
   } //level>0
 }
 
-void rfidInit()
-{
-  #ifdef USE_PIGPIO
-  gpioCfgClock(5, PI_CLOCK_PCM, PI_CLOCK_PLLD);
+void rfidReaderClass::pinChangedStatic(){
+}
 
-  if (gpioInitialise()<0){
-    exit(EXIT_FAILURE);
-  }
-
-  if (gpioSetAlertFunc(EM4095_DEMOD, pinChanged) != 0) {
-    exit(EXIT_FAILURE);
-  }
-  gpioSetMode(EM4095_DEMOD, PI_INPUT);
-  #endif
-
-  #ifdef USE_WIRINGPI
+rfidReaderClass::rfidReaderClass() {
   wiringPiSetupGpio();
-  wiringPiISR(EM4095_DEMOD, INT_EDGE_RISING,  pinChanged) ;
-  #endif
+  wiringPiISR(EM4095_DEMOD, INT_EDGE_RISING, rfidReaderClass::pinChangedStatic) ;
 }
 
-void rfidDeinit(){
-  #ifdef USE_PIGPIO
-  gpioTerminate();
-  #endif
-}
-
-int rfidCheck(unsigned int** dataBufferRef){
-  int status = 0;
-  if (bufferState == full) {
-    //Daten auslesen
-    *dataBufferRef = dataBuffer;
-    ClearBuffer();
-  }
-  else {
-    status = -1;
-  }
-
-  return status;
+string rfidReaderClass::getTag(){
+    if (bufferState == full){
+        string retVal = tagBuffer[2];
+        tagBuffer[0] = "";
+        tagBuffer[1] = "";
+        tagBuffer[2] = "";
+        ClearBuffer();
+        return retVal;
+    }
+    else {
+        return "";
+    }
 }
 
 void sleep(uint32_t us){
-  #ifdef USE_PIGPIO
-  gpioDelay(us);
-  #endif
-
-  #ifdef USE_WIRINGPI
   delayMicroseconds(us);
-  #endif
 }

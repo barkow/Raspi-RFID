@@ -5,17 +5,19 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <curl/curl.h>
 
 
 typedef void (*sighandler_t)(int);
 
 #define PORT 6378 //Port auf dem der Socket horcht
+#define SOURCENAME "TestSource"
 #define LOGMESSAGE(message) printf(message)
 
 static void shutdownProcess(int signr) {
   if (signr == SIGTERM) {
     LOGMESSAGE("Bye\n");
-    rfidDeinit();    
+    rfidDeinit();
     exit(EXIT_SUCCESS);
   }
 }
@@ -72,11 +74,29 @@ int waitForConnection(int socketDesc){
   return clientSock;
 }
 
+int sendPostRequest(char* source, char*owner){
+  CURL *curl;
+  CURLcode res;
+  struct curl_slist *header = NULL;
+  #define JSONOBJ "{ \"source\" : \"%s\" , \"owner\" : \"%s\" }"
+  char jsonObj[255];
+
+  curl = curl_easy_init();
+  curl_easy_setopt(curl, CURLOPT_URL, "http://localhost/rfidEventStorage.php");
+  sprintf(jsonObj, JSONOBJ, source, owner);
+  header = curl_slist_append(header, "Content-Type: application/json");
+  curl_easy_setopt(curl, CURLOPT_POST, 1);
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonObj);
+  res = curl_easy_perform(curl);
+  curl_easy_cleanup(curl);
+}
+
 int main (int argc, char *argv[])
 {
   int socketDesc;
   int clientSock = -1;
-  unsigned int *rfidData; 
+  unsigned int *rfidData;
   LOGMESSAGE("This is rfidaemon\n");
 
   rfidInit();
@@ -85,14 +105,15 @@ int main (int argc, char *argv[])
   signal_add(SIGTERM, shutdownProcess);
   signal(SIGPIPE, SIG_IGN);
 
-  socketDesc = createSocket();
-
+  //socketDesc = createSocket();
   while (1)
   {
+    /*
     //Warten, bis Verbindung mit Socket aufgebaut wurde
     if (clientSock < 0){
       clientSock = waitForConnection(socketDesc);
     }
+    */
 
     //Prüfen, ob ein gültiges Paket empfangen wurde
     if (rfidCheck(&rfidData) == 0) {
@@ -104,12 +125,15 @@ int main (int argc, char *argv[])
         sprintf(tmp, "%02x", rfidData[i]);
         strcat(dataString, tmp);
       }
-      strcat(dataString, "\n");      
+      strcat(dataString, "\n");
+      /*
       if (write(clientSock, dataString, strlen(dataString))< 0){
         LOGMESSAGE("Client disconnected\n");
         close(clientSock);
         clientSock = -1;
       }
+      */
+      sendPostRequest(SOURCENAME, dataString);
     }
     sleep(200000);
   }
