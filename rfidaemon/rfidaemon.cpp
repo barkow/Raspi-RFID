@@ -1,21 +1,24 @@
-#include <stdio.h>
+#include "rfidreader.h"
+#include "userinterface.h"
+#include "eventstorageconnector.h"
+
+#include <iostream>
 #include <signal.h>
 #include <stdlib.h>
-#include <curl/curl.h>
-#include "rfidreader.h"
+
 #include <string>
+
 using namespace std;
 
 typedef void (*sighandler_t)(int);
 
 #define SOURCENAME "TestSource"
-#define LOGMESSAGE(message) printf(message)
+#define LOGMESSAGE(message) cout << (message) << endl
+
+bool exitLoop = false;
 
 static void shutdownProcess(int signr) {
-  if (signr == SIGTERM) {
-    LOGMESSAGE("Bye\n");
-    exit(EXIT_SUCCESS);
-  }
+  exitLoop = true;
 }
 
 static sighandler_t signal_add (int sig_nr, sighandler_t signalhandler) {
@@ -32,44 +35,35 @@ static sighandler_t signal_add (int sig_nr, sighandler_t signalhandler) {
   return add_sig.sa_handler;
 }
 
-
-int sendPostRequest(char* source, string owner){
-  CURL *curl;
-  CURLcode res;
-  struct curl_slist *header = NULL;
-  #define JSONOBJ "{ \"source\" : \"%s\" , \"owner\" : \"%s\" }"
-  char jsonObj[255];
-
-  curl = curl_easy_init();
-  curl_easy_setopt(curl, CURLOPT_URL, "http://localhost/rfidEventStorage.php");
-  sprintf(jsonObj, JSONOBJ, source, owner.c_str());
-  header = curl_slist_append(header, "Content-Type: application/json");
-  curl_easy_setopt(curl, CURLOPT_POST, 1);
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonObj);
-  res = curl_easy_perform(curl);
-  curl_easy_cleanup(curl);
-}
-
 int main (int argc, char *argv[])
 {
   unsigned int *rfidData;
-  LOGMESSAGE("This is rfidaemon\n");
+  LOGMESSAGE("This is rfidaemon");
 
   rfidReaderClass *rfidReader = new rfidReaderClass();
+  eventStorageConnectorClass *eventStorageConnector = new eventStorageConnectorClass(SOURCENAME);
+  userInterfaceClass *userInterface = new userInterfaceClass();
 
   //Handler für das Beenden des Prozesses anmelden
   signal_add(SIGTERM, shutdownProcess);
+  signal_add(SIGINT, shutdownProcess);
   signal(SIGPIPE, SIG_IGN);
 
-  //socketDesc = createSocket();
-  while (1)
+  while (!exitLoop)
   {
     //Prüfen, ob ein gültiges Paket empfangen wurde
     string tag = rfidReader->getTag();
     if (tag != "") {
-      sendPostRequest(SOURCENAME, tag);
+      userInterface->setState(userInterfaceClass::recognized);
+      eventStorageConnector->addEvent(tag);
+      userInterface->setState(userInterfaceClass::accepted);
     }
-    sleep(200000);
+    mysleep(200000);
+    userInterface->handler();
   }
+  delete rfidReader;
+  delete eventStorageConnector;
+  delete userInterface;
+  LOGMESSAGE("Bye\n");
+  exit(EXIT_SUCCESS);
 }

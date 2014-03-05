@@ -2,8 +2,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "wiringPi.h"
+//dummy implementations
+#define wiringPiSetupGpio()
+#define wiringPiISR(a,b,c)
+#define micros() 10
+#define delayMicroseconds(a) usleep(a)
 
 #define EM4095_DEMOD 11 /* GPIO 11 as interrupt input */
 #define BITLENGTH 256 //Bitlänge in us -> 1/125kHz*32
@@ -17,6 +23,8 @@
 #define ClearBuffer() bufferState = empty
 static unsigned int dataBuffer[13];
 static enum states {empty, header, data, stop, full} bufferState = empty;
+
+rfidReaderClass *rfidReaderClass::selfStatic = NULL;
 
 void rfidReaderClass::AddBitToBuffer(unsigned int bit) {
   static unsigned int blockIndex = 0;
@@ -185,9 +193,11 @@ void rfidReaderClass::pinChanged() {
 }
 
 void rfidReaderClass::pinChangedStatic(){
+    rfidReaderClass::selfStatic->pinChanged();
 }
 
 rfidReaderClass::rfidReaderClass() {
+  rfidReaderClass::selfStatic = NULL;
   wiringPiSetupGpio();
   wiringPiISR(EM4095_DEMOD, INT_EDGE_RISING, rfidReaderClass::pinChangedStatic) ;
 }
@@ -206,6 +216,6 @@ string rfidReaderClass::getTag(){
     }
 }
 
-void sleep(uint32_t us){
+void mysleep(uint32_t us){
   delayMicroseconds(us);
 }

@@ -7,7 +7,7 @@ using namespace std;
 
 void rfidDeinit();
 int rfidCheck(unsigned int** dataBufferRef);
-void sleep(uint32_t us);
+void mysleep(uint32_t us);
 
 class rfidReaderClass{
     public:
@@ -16,6 +16,7 @@ class rfidReaderClass{
     private:
     void pinChanged();
     static void pinChangedStatic();
+    static rfidReaderClass *selfStatic;
     void AddBitToBuffer(unsigned int bit);
     string tagBuffer[3];
 };
