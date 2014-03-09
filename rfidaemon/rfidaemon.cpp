@@ -49,6 +49,8 @@ int main (int argc, char *argv[])
   signal_add(SIGINT, shutdownProcess);
   signal(SIGPIPE, SIG_IGN);
 
+  eventStorageConnector->addEvent("12345");
+
   while (!exitLoop)
   {
     //Prüfen, ob ein gültiges Paket empfangen wurde
